@@ -18,6 +18,7 @@ RUN apt-get update --yes && \
     # - apt-get upgrade is run to patch known vulnerabilities in apt-get packages as
     #   the ubuntu base image is rebuilt too seldom sometimes (less than once a month)
     apt-get upgrade --yes 
+   
 
 # # - bzip2 is necessary to extract the micromamba executable.
 RUN apt-get update && apt-get install --yes bzip2 \
@@ -75,7 +76,7 @@ RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashr
    # Add call to conda init script see https://stackoverflow.com/a/58081608/4413446
    echo 'eval "$(command conda shell.bash hook 2> /dev/null)"' >> /etc/skel/.bashrc
 
-# Create NB_USER with name jovyan user with UID=1000 and in the 'users' group
+# Create NB_USER with name jovyan/coder user with UID=1000 and in the 'users' group
 # and make sure these dirs are writable by the `users` group.
 RUN echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
     sed -i.bak -e 's/^%admin/#%admin/' /etc/sudoers && \
@@ -147,10 +148,11 @@ EXPOSE 8881
 
 # Configure container startup
 # ENTRYPOINT ["tini", "-g", "--"]
-# CMD ["start-notebook.sh"]
+CMD ["start-notebook.sh"]
 
 # Copy local files as late as possible to avoid cache busting
 COPY start.sh start-notebook.sh start-singleuser.sh /usr/local/bin/
+
 # Currently need to have both jupyter_notebook_config and jupyter_server_config to support classic and lab
 COPY jupyter_server_config.py /etc/jupyter/
 
@@ -159,17 +161,63 @@ USER root
 
 # Legacy for Jupyter Notebook Server, see: [#1205](https://github.com/jupyter/docker-stacks/issues/1205)
 RUN sed -re "s/c.ServerApp/c.NotebookApp/g" \
-    /etc/jupyter/jupyter_server_config.py > /etc/jupyter/jupyter_notebook_config.py && \
-    fix-permissions /etc/jupyter/
+     /etc/jupyter/jupyter_server_config.py > /etc/jupyter/jupyter_notebook_config.py && \
+     fix-permissions /etc/jupyter/
 
-# HEALTHCHECK documentation: https://docs.docker.com/engine/reference/builder/#healthcheck
-# This healtcheck works well for `lab`, `notebook`, `nbclassic`, `server` and `retro` jupyter commands
-# https://github.com/jupyter/docker-stacks/issues/915#issuecomment-1068528799
+# # HEALTHCHECK documentation: https://docs.docker.com/engine/reference/builder/#healthcheck
+# # This healtcheck works well for `lab`, `notebook`, `nbclassic`, `server` and `retro` jupyter commands
+# # https://github.com/jupyter/docker-stacks/issues/915#issuecomment-1068528799
 HEALTHCHECK  --interval=15s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -O- --no-verbose --tries=1 --no-check-certificate \
-    http${GEN_CERT:+s}://localhost:8888${JUPYTERHUB_SERVICE_PREFIX:-/}api || exit 1
+     CMD wget -O- --no-verbose --tries=1 --no-check-certificate \
+     http${GEN_CERT:+s}://localhost:8888${JUPYTERHUB_SERVICE_PREFIX:-/}api || exit 1
 
+# Initial ABXDA
+RUN apt-get update && \
+    apt-get install -y gdal-bin
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    apt-get clean
+
+RUN apt-get update && apt-get -y install cmake protobuf-compiler
+
+RUN apt-get update && apt-get install -y \
+	libopencv-dev \
+	python3-opencv && \
+    rm -rf /var/lib/apt/lists/*
+
+USER ${NB_USER}
+
+RUN pip install tqdm \
+    psycopg2-binary sqlalchemy && \
+    conda install -y gdal && \
+    conda install -y -c conda-forge opencv
+
+RUN pip install --no-cache-dir \
+    html2text \
+    psycopg2-binary \
+    newspaper3k==0.2.8 \
+    altair \
+    vega_datasets \
+    geopandas \
+    attrs \
+    apache-sedona \
+    xlsxwriter \
+    openpyxl
+
+RUN git clone --recursive https://github.com/dmlc/xgboost && \
+    cd xgboost && \
+    make -j4 && \
+    cd python-package; python setup.py install
+
+RUN pip install tensorflow && \
+    pip install pyyaml \
+        h5py && \
+    pip install keras --no-deps && \
+    pip install opencv-python && \
+    pip install imutils
+
+ # End ABXDA
 
 # RUN groupadd docker \
 #     usermod -aG docker $USER
@@ -177,5 +225,5 @@ HEALTHCHECK  --interval=15s --timeout=3s --start-period=5s --retries=3 \
 
 # ENTRYPOINT ["/usr/local/bin/wrapper", "/usr/local/bin/dind"]
 # CMD ["/usr/local/bin/wrapper", "/usr/local/bin/dind"]
-ENTRYPOINT ["/usr/bin/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/entrypoint.sh"]   
 
