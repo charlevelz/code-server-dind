@@ -1,5 +1,7 @@
- code-server-dind:
-    image: xefir/code-server-dind
+version: "3.9"
+services:
+ coder-server:
+    image: carlsvelz/codedind
     privileged: true
     ports:
       - "8080:8080"
