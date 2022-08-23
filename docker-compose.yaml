@@ -3,6 +3,9 @@ services:
  coder-server:
     image: carlsvelzm/codedind
     privileged: true
+    environment:
+      - PASSWORD=test123
+      - SUDO_PASSWORD=test123
     ports:
       - "8080:8080"
     volumes:
