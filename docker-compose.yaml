@@ -1,7 +1,7 @@
 version: "3.9"
 services:
  coder-server:
-    image: carlsvelz/codedind
+    image: carlsvelzm/codedind
     privileged: true
     ports:
       - "8080:8080"
